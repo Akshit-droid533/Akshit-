@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="Nova AI - DeepSeek powered AI coding assistant"
+    >
+
+    <title>Nova AI</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body>
+
+<div class="app">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            <div class="logo">N</div>
+            <span>Nova AI</span>
+        </div>
+
+        <button
+            class="new-chat"
+            onclick="newChat()"
+        >
+            + New Chat
+        </button>
+
+        <div class="section-title">
+            WORKSPACE
+        </div>
+
+        <button
+            class="side-button"
+            onclick="showFiles()"
+        >
+            Generated Files
+        </button>
+
+        <button
+            class="side-button"
+            onclick="createZip()"
+        >
+            Create ZIP
+        </button>
+
+        <button
+            class="side-button danger"
+            onclick="clearFiles()"
+        >
+            Clear Files
+        </button>
+
+        <div class="sidebar-bottom">
+            DeepSeek + Flask
+        </div>
+
+    </aside>
+
+
+    <main class="chat">
+
+        <header class="topbar">
+
+            <div>
+
+                <div class="title">
+                    Nova AI
+                </div>
+
+                <div class="status">
+                    <span></span>
+                    DeepSeek Ready
+                </div>
+
+            </div>
+
+            <button
+                class="theme-button"
+                onclick="toggleTheme()"
+            >
+                Theme
+            </button>
+
+        </header>
+
+
+        <section
+            id="messages"
+            class="messages"
+        >
+
+            <div class="welcome">
+
+                <div class="welcome-logo">
+                    N
+                </div>
+
+                <h1>
+                    Build something great.
+                </h1>
+
+                <p>
+                    Ask Nova AI questions, generate code,
+                    create files and package projects
+                    into ZIP files.
+                </p>
+
+                <div class="suggestions">
+
+                    <button onclick="usePrompt(
+                        'Create a Python calculator in calculator.py'
+                    )">
+                        Python Calculator
+                    </button>
+
+                    <button onclick="usePrompt(
+                        'Create a simple website with HTML, CSS and JavaScript'
+                    )">
+                        Website
+                    </button>
+
+                    <button onclick="usePrompt(
+                        'Create a Godot player movement script'
+                    )">
+                        Godot Script
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <div class="composer-area">
+
+            <form id="composer">
+
+                <textarea
+                    id="input"
+                    rows="1"
+                    placeholder="Message Nova AI..."
+                    autocomplete="off"
+                ></textarea>
+
+                <button
+                    class="send-button"
+                    type="submit"
+                >
+                    ↑
+                </button>
+
+            </form>
+
+            <div class="hint">
+                Enter to send · Shift+Enter for a new line
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+
+<script
+    src="{{ url_for('static', filename='app.js') }}"
+></script>
+
+</body>
+
+</html>
