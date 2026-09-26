@@ -7,57 +7,41 @@ from zipfile import ZipFile
 from flask import Flask, render_template, request, jsonify, send_file
 from openai import OpenAI
 
-
 app = Flask(__name__)
 
-
-# ============================================================
-# GENERATED FILE WORKSPACE
-# ============================================================
-
+# Render temporary workspace
 GENERATED = Path("/tmp/nova_generated")
 GENERATED.mkdir(parents=True, exist_ok=True)
 
-
 ALLOWED_EXTENSIONS = {
-    ".py",
-    ".js",
-    ".html",
-    ".css",
-    ".json",
-    ".txt",
-    ".md",
-    ".gd",
-    ".xml",
-    ".yml",
-    ".yaml"
+    ".py", ".js", ".html", ".css", ".json",
+    ".txt", ".md", ".gd", ".xml", ".yml", ".yaml"
 }
 
-
 # ============================================================
-# DEEPSEEK CONFIGURATION
+# OPENROUTER
 # ============================================================
 
-api_key = os.getenv("DEEPSEEK_API_KEY")
+api_key = os.getenv("OPENROUTER_API_KEY")
 
 if not api_key:
-    print("WARNING: DEEPSEEK_API_KEY is not configured.")
-
+    print("WARNING: OPENROUTER_API_KEY is not configured.")
 
 client = OpenAI(
     api_key=api_key,
-    base_url="https://api.deepseek.com"
+    base_url="https://openrouter.ai/api/v1"
 )
 
+MODEL = "openrouter/free"
 
 # ============================================================
-# AI SYSTEM PROMPT
+# AI PROMPT
 # ============================================================
 
 SYSTEM_PROMPT = """
 You are Nova AI, a helpful AI coding and general-purpose assistant.
 
-You can answer normal questions.
+When the user asks for normal information, answer normally.
 
 When the user asks you to create a file or project, return ONLY
 valid JSON in this exact structure:
@@ -75,7 +59,7 @@ valid JSON in this exact structure:
 Rules:
 
 - Always return valid JSON.
-- Never wrap the JSON in Markdown code fences.
+- Never use Markdown code fences around the JSON.
 - Never execute terminal commands.
 - Never create executable binaries.
 - Only create text/code files.
@@ -86,7 +70,6 @@ Rules:
 - Put complete file contents inside each content field.
 - If the user does not request files, return an empty files array.
 - If creating a project, create all required files.
-- Make the generated code complete and usable.
 """
 
 
@@ -114,7 +97,7 @@ def safe_filename(filename):
 
 
 # ============================================================
-# HOME PAGE
+# HOME
 # ============================================================
 
 @app.get("/")
@@ -123,7 +106,7 @@ def home():
 
 
 # ============================================================
-# CHAT API
+# CHAT
 # ============================================================
 
 @app.post("/api/chat")
@@ -133,19 +116,16 @@ def chat():
         return jsonify({
             "success": False,
             "reply": (
-                "DeepSeek API key is not configured on the server. "
-                "Add DEEPSEEK_API_KEY in Render Environment Variables."
+                "OpenRouter API key is not configured. "
+                "Add OPENROUTER_API_KEY in Render."
             )
         }), 500
 
-
     data = request.get_json(silent=True) or {}
-
 
     user_message = str(
         data.get("message", "")
     ).strip()
-
 
     if not user_message:
         return jsonify({
@@ -153,12 +133,10 @@ def chat():
             "reply": "Please type a message."
         }), 400
 
-
     try:
 
         response = client.chat.completions.create(
-
-            model="deepseek-chat",
+            model=MODEL,
 
             messages=[
                 {
@@ -178,123 +156,75 @@ def chat():
             max_tokens=8192
         )
 
-
         ai_text = response.choices[0].message.content
-
 
         if not ai_text:
             raise ValueError(
-                "DeepSeek returned an empty response."
+                "OpenRouter returned an empty response."
             )
-
 
         result = json.loads(ai_text)
 
-
         reply = str(
-            result.get(
-                "message",
-                "Done."
-            )
+            result.get("message", "Done.")
         )
-
 
         created_files = []
 
-
-        files = result.get(
-            "files",
-            []
-        )
-
+        files = result.get("files", [])
 
         if not isinstance(files, list):
             files = []
-
 
         for item in files:
 
             if not isinstance(item, dict):
                 continue
 
-
             filename = safe_filename(
-                item.get(
-                    "filename",
-                    ""
-                )
+                item.get("filename", "")
             )
-
 
             content = str(
-                item.get(
-                    "content",
-                    ""
-                )
+                item.get("content", "")
             )
 
-
             path = GENERATED / filename
-
 
             path.write_text(
                 content,
                 encoding="utf-8"
             )
 
-
-            created_files.append(
-                filename
-            )
-
+            created_files.append(filename)
 
         return jsonify({
-
             "success": True,
-
             "reply": reply,
-
             "files": created_files
-
         })
-
 
     except json.JSONDecodeError as error:
 
-        print(
-            "JSON ERROR:",
-            repr(error)
-        )
+        print("JSON ERROR:", repr(error))
 
         return jsonify({
-
             "success": False,
-
-            "reply":
-                "DeepSeek returned invalid JSON."
-
+            "reply": "The AI returned invalid JSON."
         }), 500
-
 
     except Exception as error:
 
-        print(
-            "DEEPSEEK ERROR:",
-            repr(error)
-        )
+        print("OPENROUTER ERROR:", repr(error))
 
         return jsonify({
-
             "success": False,
-
-            "reply":
-                f"DeepSeek error: {error}"
-
+            "reply": f"OpenRouter error: {error}"
         }), 500
 
 
 # ============================================================
-# LIST GENERATED FILES
+# LIST FILES
 # ============================================================
 
 @app.get("/api/files")
@@ -302,23 +232,13 @@ def list_files():
 
     files = []
 
-
     for file in GENERATED.iterdir():
-
         if file.is_file():
-
-            files.append(
-                file.name
-            )
-
+            files.append(file.name)
 
     return jsonify({
-
         "success": True,
-
-        "files":
-            sorted(files)
-
+        "files": sorted(files)
     })
 
 
@@ -331,42 +251,25 @@ def download_file(filename):
 
     try:
 
-        filename = safe_filename(
-            filename
-        )
-
+        filename = safe_filename(filename)
 
         path = GENERATED / filename
 
-
         if not path.exists():
-
             return jsonify({
-
-                "error":
-                    "File not found."
-
+                "error": "File not found."
             }), 404
 
-
         return send_file(
-
             path,
-
             as_attachment=True,
-
             download_name=filename
-
         )
-
 
     except ValueError as error:
 
         return jsonify({
-
-            "error":
-                str(error)
-
+            "error": str(error)
         }), 400
 
 
@@ -378,63 +281,38 @@ def download_file(filename):
 def create_zip():
 
     files = [
-
         file
-
         for file in GENERATED.iterdir()
-
         if file.is_file()
-
     ]
 
-
     if not files:
-
         return jsonify({
-
-            "error":
-                "There are no generated files."
-
+            "error": "There are no generated files."
         }), 400
-
 
     memory_file = BytesIO()
 
-
-    with ZipFile(
-        memory_file,
-        "w"
-    ) as zip_file:
+    with ZipFile(memory_file, "w") as zip_file:
 
         for file in files:
-
             zip_file.write(
-
                 file,
-
                 arcname=file.name
-
             )
-
 
     memory_file.seek(0)
 
-
     return send_file(
-
         memory_file,
-
         as_attachment=True,
-
         download_name="nova_project.zip",
-
         mimetype="application/zip"
-
     )
 
 
 # ============================================================
-# CLEAR GENERATED FILES
+# CLEAR FILES
 # ============================================================
 
 @app.post("/api/clear-files")
@@ -443,52 +321,37 @@ def clear_files():
     for file in GENERATED.iterdir():
 
         if file.is_file():
-
             file.unlink()
 
-
     return jsonify({
-
         "success": True,
-
-        "message":
-            "Generated files cleared."
-
+        "message": "Generated files cleared."
     })
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH
 # ============================================================
 
 @app.get("/health")
 def health():
 
     return jsonify({
-
         "status": "ok"
-
     })
 
 
 # ============================================================
-# RUN SERVER
+# SERVER
 # ============================================================
 
 if __name__ == "__main__":
 
     port = int(
-        os.environ.get(
-            "PORT",
-            5000
-        )
+        os.environ.get("PORT", 5000)
     )
 
-
     app.run(
-
         host="0.0.0.0",
-
         port=port
-
     )
