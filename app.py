@@ -7,19 +7,35 @@ from zipfile import ZipFile
 from flask import Flask, render_template, request, jsonify, send_file
 from openai import OpenAI
 
+
 app = Flask(__name__)
 
-# Render temporary workspace
+
+# ============================================================
+# GENERATED FILE WORKSPACE
+# ============================================================
+
 GENERATED = Path("/tmp/nova_generated")
 GENERATED.mkdir(parents=True, exist_ok=True)
 
+
 ALLOWED_EXTENSIONS = {
-    ".py", ".js", ".html", ".css", ".json",
-    ".txt", ".md", ".gd", ".xml", ".yml", ".yaml"
+    ".py",
+    ".js",
+    ".html",
+    ".css",
+    ".json",
+    ".txt",
+    ".md",
+    ".gd",
+    ".xml",
+    ".yml",
+    ".yaml"
 }
 
+
 # ============================================================
-# OPENROUTER
+# OPENROUTER CONFIGURATION
 # ============================================================
 
 api_key = os.getenv("OPENROUTER_API_KEY")
@@ -27,23 +43,26 @@ api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:
     print("WARNING: OPENROUTER_API_KEY is not configured.")
 
+
 client = OpenAI(
     api_key=api_key,
     base_url="https://openrouter.ai/api/v1"
 )
 
+
 MODEL = "openrouter/free"
 
+
 # ============================================================
-# AI PROMPT
+# AI SYSTEM PROMPT
 # ============================================================
 
 SYSTEM_PROMPT = """
-You are Nova AI, a helpful AI coding and general-purpose assistant.
+You are Nova AI, a helpful AI assistant and coding assistant.
 
-When the user asks for normal information, answer normally.
+For normal questions, answer naturally and clearly.
 
-When the user asks you to create a file or project, return ONLY
+When the user asks you to CREATE FILES or a PROJECT, return ONLY
 valid JSON in this exact structure:
 
 {
@@ -56,20 +75,24 @@ valid JSON in this exact structure:
   ]
 }
 
-Rules:
+For file-generation requests:
 
-- Always return valid JSON.
-- Never use Markdown code fences around the JSON.
+- Return valid JSON.
+- Do not use Markdown code fences around the JSON.
 - Never execute terminal commands.
 - Never create executable binaries.
 - Only create text/code files.
 - Never use ../ in filenames.
 - Never use absolute paths.
-- Keep filenames simple.
-- Only create files with supported extensions.
-- Put complete file contents inside each content field.
-- If the user does not request files, return an empty files array.
-- If creating a project, create all required files.
+- Use supported file extensions.
+- Include complete file contents.
+- Create all required project files.
+
+For normal questions:
+
+- DO NOT return JSON.
+- Answer naturally.
+- Be helpful and clear.
 """
 
 
@@ -78,6 +101,7 @@ Rules:
 # ============================================================
 
 def safe_filename(filename):
+
     if not isinstance(filename, str):
         raise ValueError("Filename must be text.")
 
@@ -97,7 +121,7 @@ def safe_filename(filename):
 
 
 # ============================================================
-# HOME
+# HOME PAGE
 # ============================================================
 
 @app.get("/")
@@ -106,36 +130,43 @@ def home():
 
 
 # ============================================================
-# CHAT
+# CHAT API
 # ============================================================
 
 @app.post("/api/chat")
 def chat():
 
     if not api_key:
+
         return jsonify({
             "success": False,
             "reply": (
                 "OpenRouter API key is not configured. "
-                "Add OPENROUTER_API_KEY in Render."
+                "Add OPENROUTER_API_KEY in Render Environment Variables."
             )
         }), 500
 
+
     data = request.get_json(silent=True) or {}
+
 
     user_message = str(
         data.get("message", "")
     ).strip()
 
+
     if not user_message:
+
         return jsonify({
             "success": False,
             "reply": "Please type a message."
         }), 400
 
+
     try:
 
         response = client.chat.completions.create(
+
             model=MODEL,
 
             messages=[
@@ -149,82 +180,136 @@ def chat():
                 }
             ],
 
-            response_format={
-                "type": "json_object"
-            },
-
             max_tokens=8192
         )
 
-        ai_text = response.choices[0].message.content
+
+        ai_text = (
+            response.choices[0].message.content
+            or ""
+        ).strip()
+
 
         if not ai_text:
+
             raise ValueError(
                 "OpenRouter returned an empty response."
             )
 
-        result = json.loads(ai_text)
 
-        reply = str(
-            result.get("message", "Done.")
-        )
+        # ====================================================
+        # TRY TO PARSE JSON
+        # ====================================================
 
-        created_files = []
+        try:
 
-        files = result.get("files", [])
+            result = json.loads(ai_text)
 
-        if not isinstance(files, list):
-            files = []
 
-        for item in files:
-
-            if not isinstance(item, dict):
-                continue
-
-            filename = safe_filename(
-                item.get("filename", "")
+            reply = str(
+                result.get(
+                    "message",
+                    "Done."
+                )
             )
 
-            content = str(
-                item.get("content", "")
+
+            created_files = []
+
+
+            files = result.get(
+                "files",
+                []
             )
 
-            path = GENERATED / filename
 
-            path.write_text(
-                content,
-                encoding="utf-8"
-            )
+            if not isinstance(files, list):
+                files = []
 
-            created_files.append(filename)
 
-        return jsonify({
-            "success": True,
-            "reply": reply,
-            "files": created_files
-        })
+            for item in files:
 
-    except json.JSONDecodeError as error:
+                if not isinstance(item, dict):
+                    continue
 
-        print("JSON ERROR:", repr(error))
 
-        return jsonify({
-            "success": False,
-            "reply": "The AI returned invalid JSON."
-        }), 500
+                filename = safe_filename(
+                    item.get(
+                        "filename",
+                        ""
+                    )
+                )
+
+
+                content = str(
+                    item.get(
+                        "content",
+                        ""
+                    )
+                )
+
+
+                path = GENERATED / filename
+
+
+                path.write_text(
+                    content,
+                    encoding="utf-8"
+                )
+
+
+                created_files.append(
+                    filename
+                )
+
+
+            return jsonify({
+
+                "success": True,
+
+                "reply": reply,
+
+                "files": created_files
+
+            })
+
+
+        except json.JSONDecodeError:
+
+            # Normal AI response.
+            # Do NOT treat it as an error.
+
+            return jsonify({
+
+                "success": True,
+
+                "reply": ai_text,
+
+                "files": []
+
+            })
+
 
     except Exception as error:
 
-        print("OPENROUTER ERROR:", repr(error))
+        print(
+            "OPENROUTER ERROR:",
+            repr(error)
+        )
+
 
         return jsonify({
+
             "success": False,
-            "reply": f"OpenRouter error: {error}"
+
+            "reply":
+                f"OpenRouter error: {error}"
+
         }), 500
 
 
 # ============================================================
-# LIST FILES
+# LIST GENERATED FILES
 # ============================================================
 
 @app.get("/api/files")
@@ -232,13 +317,23 @@ def list_files():
 
     files = []
 
+
     for file in GENERATED.iterdir():
+
         if file.is_file():
-            files.append(file.name)
+
+            files.append(
+                file.name
+            )
+
 
     return jsonify({
+
         "success": True,
-        "files": sorted(files)
+
+        "files":
+            sorted(files)
+
     })
 
 
@@ -251,25 +346,42 @@ def download_file(filename):
 
     try:
 
-        filename = safe_filename(filename)
+        filename = safe_filename(
+            filename
+        )
+
 
         path = GENERATED / filename
 
+
         if not path.exists():
+
             return jsonify({
-                "error": "File not found."
+
+                "error":
+                    "File not found."
+
             }), 404
 
+
         return send_file(
+
             path,
+
             as_attachment=True,
+
             download_name=filename
+
         )
+
 
     except ValueError as error:
 
         return jsonify({
-            "error": str(error)
+
+            "error":
+                str(error)
+
         }), 400
 
 
@@ -281,38 +393,63 @@ def download_file(filename):
 def create_zip():
 
     files = [
+
         file
+
         for file in GENERATED.iterdir()
+
         if file.is_file()
+
     ]
 
+
     if not files:
+
         return jsonify({
-            "error": "There are no generated files."
+
+            "error":
+                "There are no generated files."
+
         }), 400
+
 
     memory_file = BytesIO()
 
-    with ZipFile(memory_file, "w") as zip_file:
+
+    with ZipFile(
+        memory_file,
+        "w"
+    ) as zip_file:
 
         for file in files:
+
             zip_file.write(
+
                 file,
+
                 arcname=file.name
+
             )
+
 
     memory_file.seek(0)
 
+
     return send_file(
+
         memory_file,
+
         as_attachment=True,
+
         download_name="nova_project.zip",
+
         mimetype="application/zip"
+
     )
 
 
 # ============================================================
-# CLEAR FILES
+# CLEAR GENERATED FILES
 # ============================================================
 
 @app.post("/api/clear-files")
@@ -321,37 +458,52 @@ def clear_files():
     for file in GENERATED.iterdir():
 
         if file.is_file():
+
             file.unlink()
 
+
     return jsonify({
+
         "success": True,
-        "message": "Generated files cleared."
+
+        "message":
+            "Generated files cleared."
+
     })
 
 
 # ============================================================
-# HEALTH
+# HEALTH CHECK
 # ============================================================
 
 @app.get("/health")
 def health():
 
     return jsonify({
+
         "status": "ok"
+
     })
 
 
 # ============================================================
-# SERVER
+# START SERVER
 # ============================================================
 
 if __name__ == "__main__":
 
     port = int(
-        os.environ.get("PORT", 5000)
+        os.environ.get(
+            "PORT",
+            5000
+        )
     )
 
+
     app.run(
+
         host="0.0.0.0",
+
         port=port
+
     )
